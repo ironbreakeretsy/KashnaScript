@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kashna Script V2</title>
+<script src="https://unpkg.com/mammoth@1.8.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+<style id="dynamicPrintPage">@page{size:A4;margin:0}</style>
+<style>
+:root{
+  --bg:#efede7;--panel:#fff;--ink:#171717;--muted:#6d6b66;--line:#d9d5cc;
+  --accent:#171717;--soft:#f7f5f0;--danger:#9d2020;--ok:#186632;
+  --left-w:290px;--editor-w:430px;--zoom:1;
+  --page-w:210mm;--page-h:297mm;--page-pad-top:23mm;--page-pad-right:20mm;
+  --page-pad-bottom:20mm;--page-pad-left:25mm;--base-font:"Courier New",monospace;
+  --base-size:12pt;--base-color:#111;
+}
+*{box-sizing:border-box}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,Arial,sans-serif;overflow:hidden}
+button,label.filebtn,.btn{
+  border:1px solid var(--ink);background:#fff;color:var(--ink);border-radius:8px;
+  padding:9px 11px;font-weight:700;cursor:pointer;font:inherit;font-size:13px
+}
+button:hover,label.filebtn:hover,.btn:hover{background:#f0eee8}
+button.primary{background:var(--ink);color:#fff}
+button.danger{border-color:var(--danger);color:var(--danger)}
+button.ghost{border-color:var(--line);background:transparent}
+button.icon{padding:7px 9px;min-width:34px}
+button:disabled{opacity:.45;cursor:not-allowed}
+input[type=file]{display:none}
+input,select,textarea{
+  width:100%;border:1px solid var(--line);border-radius:8px;padding:8px 9px;background:#fff;color:var(--ink);font:inherit
+}
+input[type=color]{padding:3px;height:36px}
+input[type=checkbox]{width:auto}
+header{height:62px;border-bottom:1px solid var(--line);background:rgba(239,237,231,.98);display:flex;align-items:center;z-index:30}
+.topbar{width:100%;padding:10px 14px;display:flex;gap:8px;align-items:center;overflow-x:auto;white-space:nowrap}
+.brand{font-size:18px;font-weight:850;margin-right:6px;line-height:1.05}
+.brand small{display:block;color:var(--muted);font-weight:500;font-size:10px;margin-top:3px}
+.file-chip{display:flex;align-items:center;gap:7px;border:1px solid var(--line);background:#fff;border-radius:9px;padding:6px 8px;max-width:190px}
+.file-chip span{overflow:hidden;text-overflow:ellipsis;font-size:12px}
+.workspace{height:calc(100vh - 62px);display:grid;grid-template-columns:var(--left-w) 6px var(--editor-w) 6px minmax(390px,1fr);min-width:920px}
+.panel{background:var(--panel);min-width:0;display:flex;flex-direction:column;overflow:hidden}
+.splitter{background:#d6d2c9;cursor:col-resize;position:relative}
+.splitter:hover,.splitter.dragging{background:#a9a49a}
+.splitter:after{content:"";position:absolute;left:2px;top:45%;width:2px;height:34px;border-left:1px solid #777;border-right:1px solid #777}
+.panel-head{min-height:50px;padding:9px 11px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;background:#fbfaf7}
+.panel-head h2{font-size:14px;margin:0;margin-right:auto}
+.status{font-size:11px;color:var(--muted)}
+.status.ok{color:var(--ok)}.status.err{color:var(--danger)}
+.tabs{display:flex;gap:5px}
+.tab{border:1px solid var(--line);padding:7px 10px;background:#fff;border-radius:7px;font-weight:700;font-size:12px;cursor:pointer}
+.tab.active{background:var(--ink);color:#fff;border-color:var(--ink)}
+.scroll{overflow:auto;min-height:0}
+.section{padding:11px;border-bottom:1px solid var(--line)}
+.section-title{font-size:11px;font-weight:800;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:0 0 9px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.field{display:flex;flex-direction:column;gap:4px;min-width:0}
+.field label{font-size:11px;color:var(--muted);font-weight:700}
+.inline{display:flex;align-items:center;gap:7px}
+.inline.wrap{flex-wrap:wrap}
+.small{font-size:11px;color:var(--muted);line-height:1.4}
+.block-list{padding:8px;display:flex;flex-direction:column;gap:0}
+.insert-row{height:20px;display:flex;align-items:center;justify-content:center;opacity:.25;transition:.15s}
+.insert-row:hover{opacity:1}
+.insert-row button{padding:0;border-radius:50%;width:19px;height:19px;line-height:16px;font-size:15px;border-color:var(--line)}
+.block-card{border:1px solid var(--line);border-radius:9px;padding:8px;background:#fff;display:grid;grid-template-columns:24px 1fr 25px;gap:7px;align-items:start;cursor:pointer}
+.block-card:hover{border-color:#9d988f}
+.block-card.selected{outline:2px solid #171717;border-color:#171717}
+.block-card.dragging{opacity:.45}
+.drag{cursor:grab;color:#8a867e;text-align:center;padding-top:4px;user-select:none}
+.block-type{font-size:10px;font-weight:800;color:var(--muted);text-transform:uppercase;margin-bottom:3px}
+.block-summary{font-family:"Courier New",monospace;font-size:11px;line-height:1.3;max-height:46px;overflow:hidden;white-space:pre-wrap}
+.scene-badge{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;border-radius:11px;background:#ece9e1;font-size:10px;font-weight:800;margin-right:5px}
+.remove-mini{border:0;background:transparent;color:var(--danger);padding:2px;font-size:16px}
+.empty{padding:28px 16px;text-align:center;color:var(--muted);font-size:13px;line-height:1.5}
+.editor-body{padding:12px;overflow:auto;min-height:0}
+.toolbar{display:flex;gap:6px;flex-wrap:wrap;padding:8px;border:1px solid var(--line);border-radius:9px;background:#faf9f6;margin-bottom:9px}
+.toolbar select,.toolbar input{width:auto;min-width:80px;height:34px;padding:5px 7px}
+.toolbar input[type=color]{min-width:44px;width:44px}
+.toolbar .sep{width:1px;background:var(--line);margin:2px 2px}
+.editor-box{
+  border:1px solid #aaa59b;border-radius:10px;min-height:210px;height:340px;resize:vertical;overflow:auto;
+  padding:18px;background:#fff;font-family:"Courier New",monospace;line-height:1.35;outline:none;white-space:pre-wrap
+}
+.editor-box:focus{border-color:#171717;box-shadow:0 0 0 2px rgba(0,0,0,.08)}
+.editor-cover{background:#e7e7e7}
+.block-actions{display:flex;gap:7px;margin-top:9px;flex-wrap:wrap}
+.cover-canvas{border:1px solid #aaa59b;border-radius:10px;min-height:500px;background:#fff;padding:30px;position:relative;text-align:center;overflow:auto}
+.cover-canvas.merged{background:#e3e3e3}
+.cover-title{font-family:var(--base-font);font-size:26px;font-weight:700;margin-top:70px}
+.cover-subtitle{margin-top:14px;font-size:16px}
+.cover-author{margin-top:60px;font-size:15px}
+.cover-contact{position:absolute;left:30px;bottom:28px;text-align:left;font-size:11px;white-space:pre-wrap}
+.cover-image{display:block;max-width:60%;max-height:190px;object-fit:contain;margin:32px auto 0}
+.preview-panel{background:#d7d4cc}
+.preview-toolbar{height:50px;padding:8px 10px;border-bottom:1px solid #bbb6ac;background:#fbfaf7;display:flex;align-items:center;gap:6px}
+.preview-toolbar select{width:auto;min-width:85px}
+.preview-toolbar .page-readout{font-size:12px;font-weight:800;margin-left:auto;margin-right:4px}
+.preview-scroll{overflow:auto;min-height:0;flex:1;padding:24px}
+.pages-scale{width:max-content;min-width:100%;transform-origin:top center}
+.paper{
+  width:var(--page-w);height:var(--page-h);background:#fff;margin:0 auto 24px;box-shadow:0 8px 25px rgba(0,0,0,.18);
+  position:relative;padding:var(--page-pad-top) var(--page-pad-right) var(--page-pad-bottom) var(--page-pad-left);
+  color:var(--base-color);font-family:var(--base-font);font-size:var(--base-size);line-height:1.15;overflow:hidden
+}
+.page-content{height:calc(100% - 12mm);overflow:hidden}
+.page-label{position:absolute;right:7mm;top:5mm;font-family:Arial,sans-serif;font-size:9px;color:#888}
+.page-footer{position:absolute;bottom:6mm;left:0;right:0;text-align:center;font-family:Arial,sans-serif;font-size:9px;color:#888}
+.cover-paper{padding:22mm;display:flex;flex-direction:column;align-items:center;text-align:center}
+.cover-paper .p-cover-title{font-size:26px;font-weight:700;margin-top:50mm}
+.cover-paper .p-cover-subtitle{margin-top:7mm;font-size:16px}
+.cover-paper .p-cover-author{margin-top:22mm;font-size:15px}
+.cover-paper .p-cover-contact{position:absolute;left:22mm;bottom:18mm;text-align:left;font-size:10px;white-space:pre-wrap}
+.cover-paper img{max-width:58%;max-height:48mm;object-fit:contain;margin-top:16mm}
+.preview-block{white-space:pre-wrap;margin:0 0 4mm;position:relative}
+.preview-block.scene{font-weight:700;margin-top:5mm;display:grid;grid-template-columns:12mm 1fr 12mm;gap:2mm;text-transform:uppercase}
+.preview-block.scene.preserve-case{text-transform:none}
+.scene-num{text-align:center;font-weight:700}
+.preview-block.action{width:100%}
+.preview-block.character{font-weight:700;text-transform:uppercase;margin-left:52mm;width:78mm;margin-bottom:1mm}
+.preview-block.character.preserve-case{text-transform:none}
+.preview-block.parenthetical{margin-left:39mm;width:55mm;margin-bottom:1mm}
+.preview-block.dialogue{margin-left:25mm;width:82mm}
+.preview-block.transition{text-align:right;font-weight:700;text-transform:uppercase;margin-top:4mm}
+.preview-block.transition.preserve-case{text-transform:none}
+.preview-block.usernote{background:#fff3a8;padding:2mm;border-radius:2mm;font-family:Arial,sans-serif;font-size:10pt}
+.modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.42);display:none;align-items:center;justify-content:center;z-index:100}
+.modal-backdrop.open{display:flex}
+.modal{width:min(680px,92vw);max-height:78vh;background:#fff;border-radius:14px;box-shadow:0 18px 60px rgba(0,0,0,.3);display:flex;flex-direction:column;overflow:hidden}
+.modal-head{padding:14px 16px;border-bottom:1px solid var(--line);display:flex;align-items:center}
+.modal-head h3{margin:0;font-size:16px;margin-right:auto}
+.draft-list{padding:12px;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.draft-row{border:1px solid var(--line);border-radius:9px;padding:10px;display:flex;align-items:center;gap:10px}
+.draft-row strong{display:block;font-size:13px}.draft-row small{color:var(--muted)}
+.draft-row .grow{flex:1}
+.toast{position:fixed;right:18px;bottom:18px;background:#171717;color:#fff;padding:10px 13px;border-radius:9px;font-size:12px;opacity:0;transform:translateY(8px);transition:.2s;z-index:110;pointer-events:none}
+.toast.show{opacity:1;transform:none}
+@media(max-width:1100px){.workspace{min-width:980px}}
+@media print{
+  body{overflow:visible;background:#fff}
+  header,.left-panel,.center-panel,.splitter,.preview-toolbar{display:none!important}
+  .workspace{display:block;height:auto;min-width:0}
+  .preview-panel,.preview-scroll{display:block;overflow:visible;padding:0;background:#fff}
+  .pages-scale{transform:none!important;width:auto!important;min-width:0!important}
+  .paper{box-shadow:none;margin:0;page-break-after:always}
+  .paper:last-child{page-break-after:auto}
+  .page-label{display:none}
+}
+</style>
+</head>
+<body>
+<header>
+  <div class="topbar">
+    <div class="brand">Kashna Script V2<small>Dosya yükle · düzenle · senaryo PDF’si oluştur</small></div>
+    <button id="newProjectBtn">Yeni Proje</button>
+    <label class="filebtn" for="docxInput">Word Yükle</label><input id="docxInput" type="file" accept=".docx">
+    <label class="filebtn" for="pdfInput">PDF Yükle</label><input id="pdfInput" type="file" accept=".pdf">
+    <div id="fileChip" class="file-chip" hidden><span id="fileName"></span><button id="removeFileBtn" class="icon ghost" title="Dosyayı kaldır">×</button></div>
+    <button id="saveDraftBtn">Taslağa Kaydet</button>
+    <button id="draftsBtn">Taslaklarım</button>
+    <button id="deleteProjectBtn" class="danger">Projeyi Sil</button>
+    <button id="printBtn" class="primary">PDF Olarak Kaydet</button>
+  </div>
+</header>
+
+<div class="workspace" id="workspace">
+  <aside class="panel left-panel">
+    <div class="panel-head"><h2>Proje ve Bloklar</h2><span id="status" class="status">Hazır</span></div>
+    <div class="scroll">
+      <section class="section">
+        <div class="section-title">Proje</div>
+        <div class="field"><label>Proje adı</label><input id="projectName" value="İsimsiz Senaryo"></div>
+        <div class="grid2" style="margin-top:8px">
+          <div class="field"><label>Standart</label>
+            <select id="standardSelect">
+              <option value="international" selected>Uluslararası A4</option>
+              <option value="usPresentation">Amerikan Sunum</option>
+              <option value="usShooting">Amerikan Çekim</option>
+              <option value="bbc">BBC TV</option>
+              <option value="custom">Özel Ayarlar</option>
+            </select>
+          </div>
+          <div class="field"><label>Sahne numarası</label>
+            <select id="sceneNumberMode"><option value="show" selected>Göster</option><option value="hide">Gizle</option></select>
+          </div>
+        </div>
+        <div class="inline wrap" style="margin-top:9px">
+          <label class="inline small"><input id="autoNumber" type="checkbox" checked> Otomatik numarala</label>
+          <label class="inline small"><input id="forceSceneUpper" type="checkbox" checked> Başlıkları büyük göster</label>
+        </div>
+      </section>
+      <section class="section" style="padding-bottom:4px">
+        <div class="section-title">Senaryo blokları</div>
+        <div class="small">Blokları sürükleyerek taşı. Aradaki + düğmesi o konuma yeni blok ekler.</div>
+      </section>
+      <div id="blockList" class="block-list"><div class="empty">Word/PDF yükle veya yeni blok ekle.</div></div>
+    </div>
+  </aside>
+
+  <div class="splitter" id="splitLeft" title="Sol paneli boyutlandır"></div>
+
+  <section class="panel center-panel">
+    <div class="panel-head">
+      <div class="tabs"><button class="tab active" data-tab="screenplay">Senaryo</button><button class="tab" data-tab="cover">Kapak</button></div>
+      <span id="autosaveStatus" class="status">Otomatik kayıt açık</span>
+    </div>
+    <div id="screenplayEditor" class="editor-body">
+      <div id="noSelection" class="empty">Soldan bir blok seç veya aradaki + düğmesiyle blok ekle.</div>
+      <div id="selectedEditor" hidden>
+        <div class="grid2" style="margin-bottom:9px">
+          <div class="field"><label>Blok türü</label><select id="blockType"></select></div>
+          <div class="field"><label>Sahne numarası</label><input id="sceneNumberInput" placeholder="Otomatik" disabled></div>
+        </div>
+        <div class="toolbar" id="formatToolbar">
+          <select id="selectionFont" title="Yazı tipi"><option>Courier New</option><option>Arial</option><option>Times New Roman</option><option>Georgia</option></select>
+          <select id="selectionSize" title="Punto"><option>10</option><option>11</option><option selected>12</option><option>13</option><option>14</option><option>16</option><option>18</option><option>24</option></select>
+          <input id="selectionColor" type="color" value="#111111" title="Renk">
+          <span class="sep"></span>
+          <button class="icon" data-command="bold" title="Kalın"><b>B</b></button>
+          <button class="icon" data-command="italic" title="İtalik"><i>I</i></button>
+          <button class="icon" data-command="underline" title="Altı çizili"><u>U</u></button>
+          <button class="icon" data-command="justifyLeft" title="Sola hizala">≡</button>
+          <button class="icon" data-command="justifyCenter" title="Ortala">≣</button>
+          <button class="icon" data-command="justifyRight" title="Sağa hizala">≡→</button>
+          <select id="caseMode" title="Büyük küçük harf"><option value="auto">Otomatik harf</option><option value="upper">Büyük harf</option><option value="preserve">Yazıldığı gibi</option></select>
+        </div>
+        <div id="richEditor" class="editor-box" contenteditable="true" spellcheck="true"></div>
+        <div class="small" style="margin-top:6px">Metni seçip üstteki araçları uygula. Alanın alt kenarından tutarak yüksekliğini değiştirebilirsin.</div>
+        <div class="block-actions">
+          <button id="moveUpBtn">Yukarı Taşı</button><button id="moveDownBtn">Aşağı Taşı</button>
+          <button id="duplicateBtn">Kopyala</button><button id="deleteBlockBtn" class="danger">Bloğu Sil</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="coverEditor" class="editor-body" hidden>
+      <div class="grid2">
+        <div class="field"><label>Kapak görünümü</label><select id="coverMode"><option value="merged" selected>Kapağı Birleştir</option><option value="separate">Kapağı Ayır</option></select></div>
+        <div class="field"><label>Kapak sayfası</label><select id="coverVisible"><option value="show" selected>Göster</option><option value="hide">Gizle</option></select></div>
+        <div class="field"><label>Başlık</label><input id="coverTitle" value="İsimsiz Senaryo"></div>
+        <div class="field"><label>Alt başlık</label><input id="coverSubtitle" value="Bir Senaryo"></div>
+        <div class="field"><label>Yazar</label><input id="coverAuthor" placeholder="Yazar adı"></div>
+        <div class="field"><label>Başlık rengi</label><input id="coverTitleColor" type="color" value="#111111"></div>
+        <div class="field"><label>Başlık fontu</label><select id="coverFont"><option>Courier New</option><option>Arial</option><option>Times New Roman</option><option>Georgia</option></select></div>
+        <div class="field"><label>Başlık punto</label><input id="coverTitleSize" type="number" min="14" max="72" value="26"></div>
+      </div>
+      <div class="field" style="margin-top:8px"><label>İletişim / not</label><textarea id="coverContact" rows="3" placeholder="E-posta, telefon veya temsilci bilgisi"></textarea></div>
+      <div class="inline wrap" style="margin:9px 0"><label class="filebtn" for="coverImageInput">Kapak Görseli Ekle</label><input id="coverImageInput" type="file" accept="image/*"><button id="removeCoverImage" class="ghost">Görseli Kaldır</button></div>
+      <div id="coverCanvas" class="cover-canvas merged">
+        <div id="canvasCoverTitle" class="cover-title">İsimsiz Senaryo</div>
+        <div id="canvasCoverSubtitle" class="cover-subtitle">Bir Senaryo</div>
+        <img id="canvasCoverImage" class="cover-image" hidden alt="Kapak görseli">
+        <div id="canvasCoverAuthor" class="cover-author">—</div>
+        <div id="canvasCoverContact" class="cover-contact"></div>
+      </div>
+      <div class="small" style="margin-top:7px">Birleşik modda editör kapağı hafif gri gösterir. PDF çıktısı her zaman beyazdır.</div>
+    </div>
+  </section>
+
+  <div class="splitter" id="splitRight" title="Yazma alanını boyutlandır"></div>
+
+  <section class="panel preview-panel">
+    <div class="preview-toolbar">
+      <button id="zoomOut" class="icon">−</button>
+      <select id="zoomSelect"><option>50</option><option>65</option><option>75</option><option>90</option><option selected>100</option><option>110</option><option>125</option><option>150</option></select>
+      <button id="zoomIn" class="icon">+</button>
+      <button id="fitPage">Sayfaya Sığdır</button>
+      <button id="fitWidth">Genişliğe Sığdır</button>
+      <button id="fullscreenBtn">Tam Ekran</button>
+      <span id="pageReadout" class="page-readout">Sayfa 1 / 1</span>
+    </div>
+    <div id="previewScroll" class="preview-scroll">
+      <div id="pagesScale" class="pages-scale"><div id="pages"></div></div>
+    </div>
+  </section>
+</div>
+
+<div id="draftModal" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-head"><h3>Taslaklarım</h3><button id="closeDrafts" class="icon ghost">×</button></div>
+    <div id="draftList" class="draft-list"></div>
+  </div>
+</div>
+<div id="toast" class="toast"></div>
+
+<script>
+const TYPES=[
+  ["scene","Sahne başlığı"],["action","Aksiyon"],["character","Karakter"],
+  ["parenthetical","Parantez içi"],["dialogue","Diyalog"],["transition","Geçiş"],["usernote","Not"]
+];
+const STANDARDS={
+  international:{label:"Uluslararası A4",page:"A4",w:"210mm",h:"297mm",pt:"23mm",pr:"20mm",pb:"20mm",pl:"25mm",font:"Courier New",size:12,sceneNumbers:true},
+  usPresentation:{label:"Amerikan Sunum",page:"Letter",w:"8.5in",h:"11in",pt:"1in",pr:"1in",pb:"1in",pl:"1.5in",font:"Courier New",size:12,sceneNumbers:false},
+  usShooting:{label:"Amerikan Çekim",page:"Letter",w:"8.5in",h:"11in",pt:"1in",pr:"1in",pb:"1in",pl:"1.5in",font:"Courier New",size:12,sceneNumbers:true},
+  bbc:{label:"BBC TV",page:"A4",w:"210mm",h:"297mm",pt:"22mm",pr:"20mm",pb:"20mm",pl:"25mm",font:"Courier New",size:12,sceneNumbers:false},
+  custom:{label:"Özel Ayarlar",page:"A4",w:"210mm",h:"297mm",pt:"23mm",pr:"20mm",pb:"20mm",pl:"25mm",font:"Courier New",size:12,sceneNumbers:true}
+};
+const $=s=>document.querySelector(s);
+const $$=s=>[...document.querySelectorAll(s)];
+const state={
+  id:null,fileName:"",name:"İsimsiz Senaryo",standard:"international",sceneNumberMode:"show",autoNumber:true,forceSceneUpper:true,
+  blocks:[],selectedId:null,activeTab:"screenplay",zoom:100,dirty:false,
+  cover:{visible:"show",mode:"merged",title:"İsimsiz Senaryo",subtitle:"Bir Senaryo",author:"",contact:"",font:"Courier New",titleSize:26,titleColor:"#111111",imageData:""}
+};
+let saveTimer=null;
+let currentPage=1;
+
+function uid(){return "b_"+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]))}
+function stripHtml(html){const d=document.createElement("div");d.innerHTML=html;return d.textContent||""}
+function toast(text){const el=$("#toast");el.textContent=text;el.classList.add("show");setTimeout(()=>el.classList.remove("show"),1800)}
+function setStatus(text,type=""){const el=$("#status");el.textContent=text;el.className="status "+type}
+function markDirty(){state.dirty=true;$("#autosaveStatus").textContent="Kaydediliyor…";clearTimeout(saveTimer);saveTimer=setTimeout(autoSave,450)}
+function autoSave(){localStorage.setItem("kashna_autosave_v2",JSON.stringify(serializeState()));state.dirty=false;$("#autosaveStatus").textContent="Otomatik kaydedildi"}
+function serializeState(){return JSON.parse(JSON.stringify(state))}
+function hydrate(obj){Object.assign(state,obj);state.blocks=(obj.blocks||[]).map(b=>({...b,id:b.id||uid(),html:b.html||escapeHtml(b.text||"")}));syncControls();renderAll()}
+
+function cleanLine(s){return s.replace(/\u00a0/g," ").replace(/[ \t]+/g," ").trim()}
+function parseSceneLine(line){
+  const m=line.match(/^\s*(?:(\d+[A-Z]?)\s*[.)-]?\s*)?((?:INT\.?|EXT\.?|INT\.?\/EXT\.?|IÇ\.?|DIŞ\.?|İÇ\.?\/DIŞ\.?|IC\.?|DIS\.?|IC\.?\/DIS\.?)(?:\s|$).*)$/i);
+  if(!m)return null;return {number:m[1]||"",text:m[2].trim()};
+}
+function isTransition(line){const x=line.toUpperCase();return /^(KESME|FADE|CUT|DISSOLVE|SMASH CUT|MATCH CUT|KARARIR|AÇILIR|ACILIR)(\s|:|$)/.test(x)||x.endsWith("CUT TO:")}
+function looksCharacter(line,prev,next){const letters=line.replace(/[^A-Za-zÇĞİÖŞÜçğıöşü]/g,"");return letters&&letters===letters.toUpperCase()&&line.length<=42&&!/[.!?]$/.test(line)&&!!next&&prev!=="scene"}
+function classify(text){
+  const lines=text.replace(/\r/g,"").split("\n").map(cleanLine).filter(Boolean);let prev="";const out=[];
+  lines.forEach((line,i)=>{let type="action",sceneNumber="",value=line;const parsed=parseSceneLine(line);
+    if(parsed){type="scene";sceneNumber=parsed.number;value=parsed.text}
+    else if(isTransition(line))type="transition";
+    else if(line.startsWith("(")&&line.endsWith(")"))type="parenthetical";
+    else if(looksCharacter(line,prev,lines[i+1]||""))type="character";
+    else if(prev==="character"||prev==="parenthetical")type="dialogue";
+    out.push({id:uid(),type,html:escapeHtml(value),sceneNumber,caseMode:"auto"});prev=type;
+  });return out;
+}
+
+function syncControls(){
+  $("#projectName").value=state.name;$("#standardSelect").value=state.standard;$("#sceneNumberMode").value=state.sceneNumberMode;
+  $("#autoNumber").checked=state.autoNumber;$("#forceSceneUpper").checked=state.forceSceneUpper;
+  $("#coverMode").value=state.cover.mode;$("#coverVisible").value=state.cover.visible;$("#coverTitle").value=state.cover.title;
+  $("#coverSubtitle").value=state.cover.subtitle;$("#coverAuthor").value=state.cover.author;$("#coverContact").value=state.cover.contact;
+  $("#coverFont").value=state.cover.font;$("#coverTitleSize").value=state.cover.titleSize;$("#coverTitleColor").value=state.cover.titleColor;
+  $("#zoomSelect").value=String(state.zoom);
+  updateFileChip();applyStandard(false);switchTab(state.activeTab,false)
+}
+function updateFileChip(){const chip=$("#fileChip");chip.hidden=!state.fileName;$("#fileName").textContent=state.fileName||""}
+function selectedBlock(){return state.blocks.find(b=>b.id===state.selectedId)||null}
+function normalizeSceneNumbers(){let n=1;state.blocks.forEach(b=>{if(b.type==="scene"){if(state.autoNumber)b.sceneNumber=String(n);n++}})}
+
+function renderBlockList(){
+  if(state.autoNumber)normalizeSceneNumbers();const host=$("#blockList");host.innerHTML="";
+  if(!state.blocks.length){host.innerHTML='<div class="empty">Word/PDF yükle veya + ile yeni blok ekle.</div>';addInsert(host,0);return}
+  addInsert(host,0);
+  state.blocks.forEach((b,i)=>{
+    const card=document.createElement("div");card.className="block-card"+(b.id===state.selectedId?" selected":"");card.draggable=true;card.dataset.id=b.id;
+    const drag=document.createElement("div");drag.className="drag";drag.textContent="⋮⋮";
+    const mid=document.createElement("div");const type=TYPES.find(x=>x[0]===b.type)?.[1]||b.type;
+    mid.innerHTML=`<div class="block-type">${b.type==="scene"?`<span class="scene-badge">${escapeHtml(b.sceneNumber||"–")}</span>`:""}${type}</div><div class="block-summary">${escapeHtml(stripHtml(b.html))}</div>`;
+    const rm=document.createElement("button");rm.className="remove-mini";rm.textContent="×";rm.onclick=e=>{e.stopPropagation();deleteBlock(b.id)};
+    card.append(drag,mid,rm);card.onclick=()=>{state.selectedId=b.id;state.activeTab="screenplay";renderAll()};
+    card.addEventListener("dragstart",e=>{card.classList.add("dragging");e.dataTransfer.setData("text/plain",b.id)});
+    card.addEventListener("dragend",()=>card.classList.remove("dragging"));
+    card.addEventListener("dragover",e=>e.preventDefault());
+    card.addEventListener("drop",e=>{e.preventDefault();const from=e.dataTransfer.getData("text/plain");moveBlockBefore(from,b.id)});
+    host.appendChild(card);addInsert(host,i+1);
+  });
+}
+function addInsert(host,index){const row=document.createElement("div");row.className="insert-row";const btn=document.createElement("button");btn.textContent="+";btn.title="Buraya blok ekle";btn.onclick=()=>insertBlock(index);row.appendChild(btn);host.appendChild(row)}
+function insertBlock(index){const b={id:uid(),type:"action",html:"Yeni metin",sceneNumber:"",caseMode:"auto"};state.blocks.splice(index,0,b);state.selectedId=b.id;state.activeTab="screenplay";markDirty();renderAll();setTimeout(()=>$("#richEditor")?.focus(),20)}
+function deleteBlock(id){const i=state.blocks.findIndex(b=>b.id===id);if(i<0)return;state.blocks.splice(i,1);if(state.selectedId===id)state.selectedId=state.blocks[Math.min(i,state.blocks.length-1)]?.id||null;markDirty();renderAll()}
+function moveBlockBefore(fromId,toId){if(fromId===toId)return;const from=state.blocks.findIndex(b=>b.id===fromId),to=state.blocks.findIndex(b=>b.id===toId);if(from<0||to<0)return;const [item]=state.blocks.splice(from,1);state.blocks.splice(from<to?to-1:to,0,item);markDirty();renderAll()}
+function moveSelected(delta){const i=state.blocks.findIndex(b=>b.id===state.selectedId);const j=i+delta;if(i<0||j<0||j>=state.blocks.length)return;[state.blocks[i],state.blocks[j]]=[state.blocks[j],state.blocks[i]];markDirty();renderAll()}
+
+function renderSelectedEditor(){
+  const b=selectedBlock();$("#noSelection").hidden=!!b;$("#selectedEditor").hidden=!b;if(!b)return;
+  $("#blockType").value=b.type;$("#sceneNumberInput").disabled=b.type!=="scene";$("#sceneNumberInput").value=b.sceneNumber||"";
+  $("#caseMode").value=b.caseMode||"auto";const ed=$("#richEditor");if(ed.innerHTML!==b.html)ed.innerHTML=b.html;
+}
+function selectionInsideEditor(){const sel=window.getSelection();if(!sel||!sel.rangeCount)return false;return $("#richEditor").contains(sel.anchorNode)}
+function exec(cmd,value=null){$("#richEditor").focus();document.execCommand(cmd,false,value);saveEditorHtml()}
+function applyFontSize(pt){
+  if(selectionInsideEditor()&&!window.getSelection().isCollapsed){document.execCommand("fontSize",false,"7");$("#richEditor").querySelectorAll('font[size="7"]').forEach(el=>{el.removeAttribute("size");el.style.fontSize=pt+"pt"})}
+  else $("#richEditor").style.fontSize=pt+"pt";saveEditorHtml()
+}
+function saveEditorHtml(){const b=selectedBlock();if(!b)return;b.html=$("#richEditor").innerHTML;markDirty();renderBlockList();renderPreview()}
+
+function renderCoverEditor(){
+  const c=state.cover;const canvas=$("#coverCanvas");canvas.classList.toggle("merged",c.mode==="merged");
+  $("#canvasCoverTitle").textContent=c.title||"İsimsiz Senaryo";$("#canvasCoverTitle").style.fontFamily=c.font;$("#canvasCoverTitle").style.fontSize=c.titleSize+"px";$("#canvasCoverTitle").style.color=c.titleColor;
+  $("#canvasCoverSubtitle").textContent=c.subtitle||"";$("#canvasCoverAuthor").textContent=c.author||"—";$("#canvasCoverContact").textContent=c.contact||"";
+  const img=$("#canvasCoverImage");img.hidden=!c.imageData;if(c.imageData)img.src=c.imageData;
+}
+
+function applyStandard(updateVisibility=true){
+  const s=STANDARDS[state.standard]||STANDARDS.international;const root=document.documentElement.style;
+  root.setProperty("--page-w",s.w);root.setProperty("--page-h",s.h);root.setProperty("--page-pad-top",s.pt);root.setProperty("--page-pad-right",s.pr);root.setProperty("--page-pad-bottom",s.pb);root.setProperty("--page-pad-left",s.pl);root.setProperty("--base-font",`"${s.font}",monospace`);root.setProperty("--base-size",s.size+"pt");
+  $("#dynamicPrintPage").textContent=`@page{size:${s.page};margin:0}`;
+  if(updateVisibility){state.sceneNumberMode=s.sceneNumbers?"show":"hide";$("#sceneNumberMode").value=state.sceneNumberMode}
+}
+function blockElement(b){
+  const el=document.createElement("div");el.className="preview-block "+b.type;
+  const preserve=b.caseMode==="preserve"||(b.caseMode==="auto"&&!state.forceSceneUpper);if(preserve)el.classList.add("preserve-case");if(b.caseMode==="upper")el.style.textTransform="uppercase";
+  if(b.type==="scene"){
+    const left=document.createElement("span");left.className="scene-num";const text=document.createElement("span");const right=document.createElement("span");right.className="scene-num";
+    const show=state.sceneNumberMode==="show";left.textContent=show?(b.sceneNumber||""):"";right.textContent=show?(b.sceneNumber||""):"";text.innerHTML=b.html;el.append(left,text,right)
+  }else el.innerHTML=b.html;
+  return el;
+}
+function makePaper(pageNo){const p=document.createElement("section");p.className="paper screenplay-page";p.dataset.page=pageNo;const label=document.createElement("div");label.className="page-label";label.textContent="Sayfa "+pageNo;const content=document.createElement("div");content.className="page-content";const footer=document.createElement("div");footer.className="page-footer";footer.textContent=pageNo;p.append(label,content,footer);return p}
+function makeCoverPaper(){
+  const c=state.cover,p=document.createElement("section");p.className="paper cover-paper";p.dataset.page="1";
+  const t=document.createElement("div");t.className="p-cover-title";t.textContent=c.title||"İsimsiz Senaryo";t.style.fontFamily=c.font;t.style.fontSize=c.titleSize+"px";t.style.color=c.titleColor;
+  const st=document.createElement("div");st.className="p-cover-subtitle";st.textContent=c.subtitle||"";const img=document.createElement("img");if(c.imageData)img.src=c.imageData;else img.hidden=true;
+  const a=document.createElement("div");a.className="p-cover-author";a.textContent=c.author||"—";const contact=document.createElement("div");contact.className="p-cover-contact";contact.textContent=c.contact||"";
+  p.append(t,st,img,a,contact);return p
+}
+function renderPreview(){
+  applyStandard(false);if(state.autoNumber)normalizeSceneNumbers();const host=$("#pages");host.innerHTML="";const oldZoom=state.zoom;applyZoom(100,false);
+  let pageNo=1;if(state.cover.visible==="show"){host.appendChild(makeCoverPaper());pageNo++}
+  let paper=makePaper(pageNo),content=paper.querySelector(".page-content");host.appendChild(paper);
+  state.blocks.forEach(b=>{
+    const el=blockElement(b);content.appendChild(el);
+    if(content.scrollHeight>content.clientHeight+2&&content.children.length>1){content.removeChild(el);pageNo++;paper=makePaper(pageNo);host.appendChild(paper);content=paper.querySelector(".page-content");content.appendChild(el)}
+  });
+  if(!state.blocks.length){const empty=document.createElement("div");empty.className="preview-block action";empty.textContent="Senaryo önizlemesi burada görünecek.";content.appendChild(empty)}
+  const pages=$$("#pages .paper");pages.forEach((p,i)=>{p.dataset.index=i+1;if(!p.classList.contains("cover-paper")){p.querySelector(".page-label").textContent=`Sayfa ${i+1}`;p.querySelector(".page-footer").textContent=i+1}});
+  currentPage=Math.min(currentPage,pages.length||1);$("#pageReadout").textContent=`Sayfa ${currentPage} / ${pages.length||1}`;applyZoom(oldZoom,false)
+}
+function applyZoom(value,rerender=false){state.zoom=Math.max(40,Math.min(180,Number(value)||100));$("#zoomSelect").value=String([50,65,75,90,100,110,125,150].reduce((a,b)=>Math.abs(b-state.zoom)<Math.abs(a-state.zoom)?b:a,100));const scale=state.zoom/100;const el=$("#pagesScale");el.style.transform=`scale(${scale})`;el.style.width=`calc(100% / ${scale})`;el.style.marginBottom=`${Math.max(0,(scale-1)*400)}px`;if(rerender)markDirty()}
+function updateCurrentPage(){const sc=$("#previewScroll"),pages=$$("#pages .paper");if(!pages.length)return;const top=sc.getBoundingClientRect().top+30;let best=1,dist=Infinity;pages.forEach((p,i)=>{const d=Math.abs(p.getBoundingClientRect().top-top);if(d<dist){dist=d;best=i+1}});currentPage=best;$("#pageReadout").textContent=`Sayfa ${best} / ${pages.length}`}
+
+function switchTab(tab,render=true){state.activeTab=tab;$$('.tab').forEach(x=>x.classList.toggle('active',x.dataset.tab===tab));$("#screenplayEditor").hidden=tab!=="screenplay";$("#coverEditor").hidden=tab!=="cover";if(render){markDirty();renderAll()}}
+function renderAll(){renderBlockList();renderSelectedEditor();renderCoverEditor();renderPreview();updateFileChip()}
+
+async function extractPdfText(file){
+  if(!window.pdfjsLib)throw new Error("PDF okuyucu yüklenemedi.");pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+  const pdf=await pdfjsLib.getDocument({data:new Uint8Array(await file.arrayBuffer())}).promise;const pages=[];
+  for(let n=1;n<=pdf.numPages;n++){const pg=await pdf.getPage(n),items=(await pg.getTextContent()).items;let lastY=null,line="",lines=[];for(const item of items){const y=item.transform?.[5];if(lastY!==null&&y!==undefined&&Math.abs(y-lastY)>4){if(line.trim())lines.push(line.trim());line=""}const s=String(item.str||"").trim();if(s)line+=(line?" ":"")+s;lastY=y}if(line.trim())lines.push(line.trim());pages.push(lines.join("\n"))}return pages.join("\n")
+}
+async function loadFile(file,type){
+  try{setStatus("Dosya okunuyor…");let text="";
+    if(type==="docx"){if(!window.mammoth)throw new Error("Word okuyucu yüklenemedi.");text=(await mammoth.extractRawText({arrayBuffer:await file.arrayBuffer()})).value}
+    else text=await extractPdfText(file);if(!text.trim())throw new Error("Dosyada seçilebilir metin bulunamadı.");
+    state.fileName=file.name;state.name=file.name.replace(/\.(docx|pdf)$/i,"");state.cover.title=state.name;state.blocks=classify(text);state.selectedId=state.blocks[0]?.id||null;state.id=null;state.activeTab="screenplay";syncControls();markDirty();renderAll();setStatus(`${state.blocks.length} blok hazır`,"ok")
+  }catch(e){console.error(e);setStatus(e.message||"Dosya okunamadı.","err")}
+}
+function resetProject(){
+  Object.assign(state,{id:null,fileName:"",name:"İsimsiz Senaryo",standard:"international",sceneNumberMode:"show",autoNumber:true,forceSceneUpper:true,blocks:[],selectedId:null,activeTab:"screenplay",zoom:100,dirty:false,cover:{visible:"show",mode:"merged",title:"İsimsiz Senaryo",subtitle:"Bir Senaryo",author:"",contact:"",font:"Courier New",titleSize:26,titleColor:"#111111",imageData:""}});
+  $("#docxInput").value="";$("#pdfInput").value="";localStorage.removeItem("kashna_autosave_v2");syncControls();renderAll();setStatus("Yeni proje","ok")
+}
+function saveDraft(){
+  const drafts=JSON.parse(localStorage.getItem("kashna_drafts_v2")||"[]");const id=state.id||("p_"+Date.now());state.id=id;const item={id,name:state.name||"İsimsiz Senaryo",updatedAt:new Date().toISOString(),data:serializeState()};const i=drafts.findIndex(d=>d.id===id);if(i>=0)drafts[i]=item;else drafts.unshift(item);localStorage.setItem("kashna_drafts_v2",JSON.stringify(drafts));autoSave();toast("Taslak kaydedildi")
+}
+function showDrafts(){
+  const drafts=JSON.parse(localStorage.getItem("kashna_drafts_v2")||"[]"),host=$("#draftList");host.innerHTML="";
+  if(!drafts.length)host.innerHTML='<div class="empty">Henüz kaydedilmiş taslak yok.</div>';
+  drafts.forEach(d=>{const row=document.createElement("div");row.className="draft-row";const info=document.createElement("div");info.className="grow";info.innerHTML=`<strong>${escapeHtml(d.name)}</strong><small>${new Date(d.updatedAt).toLocaleString("tr-TR")}</small>`;const open=document.createElement("button");open.textContent="Aç";open.onclick=()=>{hydrate(d.data);$("#draftModal").classList.remove("open");toast("Taslak açıldı")};const del=document.createElement("button");del.className="danger";del.textContent="Sil";del.onclick=()=>{const next=drafts.filter(x=>x.id!==d.id);localStorage.setItem("kashna_drafts_v2",JSON.stringify(next));showDrafts()};row.append(info,open,del);host.appendChild(row)});
+  $("#draftModal").classList.add("open")
+}
+
+function bindSplitter(id,side){
+  const sp=$(id);sp.addEventListener("pointerdown",e=>{sp.classList.add("dragging");sp.setPointerCapture(e.pointerId);const start=e.clientX;const root=getComputedStyle(document.documentElement);const initial=parseFloat(root.getPropertyValue(side==="left"?"--left-w":"--editor-w"));
+    const move=ev=>{const delta=ev.clientX-start;const v=side==="left"?initial+delta:initial+delta;document.documentElement.style.setProperty(side==="left"?"--left-w":"--editor-w",Math.max(side==="left"?210:300,Math.min(side==="left"?500:720,v))+"px")};
+    const up=()=>{sp.classList.remove("dragging");sp.removeEventListener("pointermove",move);sp.removeEventListener("pointerup",up)};sp.addEventListener("pointermove",move);sp.addEventListener("pointerup",up)
+  })
+}
+
+TYPES.forEach(([v,l])=>{const o=document.createElement("option");o.value=v;o.textContent=l;$("#blockType").appendChild(o)});
+$$('.tab').forEach(t=>t.onclick=()=>switchTab(t.dataset.tab));
+$("#docxInput").onchange=e=>e.target.files[0]&&loadFile(e.target.files[0],"docx");
+$("#pdfInput").onchange=e=>e.target.files[0]&&loadFile(e.target.files[0],"pdf");
+$("#newProjectBtn").onclick=()=>{if(state.dirty&&!confirm("Kaydedilmemiş değişiklikler silinsin mi?"))return;resetProject()};
+$("#deleteProjectBtn").onclick=()=>{if(confirm("Bu proje tamamen silinsin mi?"))resetProject()};
+$("#removeFileBtn").onclick=()=>{if(confirm("Yüklenen dosya ve senaryo blokları kaldırılsın mı?")){state.fileName="";state.blocks=[];state.selectedId=null;$("#docxInput").value="";$("#pdfInput").value="";markDirty();renderAll()}};
+$("#saveDraftBtn").onclick=saveDraft;$("#draftsBtn").onclick=showDrafts;$("#closeDrafts").onclick=()=>$("#draftModal").classList.remove("open");
+$("#draftModal").onclick=e=>{if(e.target===$("#draftModal"))$("#draftModal").classList.remove("open")};
+$("#printBtn").onclick=()=>{renderPreview();window.print()};
+$("#projectName").oninput=e=>{state.name=e.target.value;state.cover.title=state.cover.title==="İsimsiz Senaryo"?state.name:state.cover.title;markDirty();renderCoverEditor();renderPreview()};
+$("#standardSelect").onchange=e=>{state.standard=e.target.value;applyStandard(true);markDirty();renderAll()};
+$("#sceneNumberMode").onchange=e=>{state.sceneNumberMode=e.target.value;markDirty();renderPreview()};
+$("#autoNumber").onchange=e=>{state.autoNumber=e.target.checked;markDirty();renderAll()};
+$("#forceSceneUpper").onchange=e=>{state.forceSceneUpper=e.target.checked;markDirty();renderPreview()};
+$("#blockType").onchange=e=>{const b=selectedBlock();if(!b)return;b.type=e.target.value;if(b.type==="scene"&&!b.sceneNumber)b.sceneNumber="";markDirty();renderAll()};
+$("#sceneNumberInput").oninput=e=>{const b=selectedBlock();if(!b)return;b.sceneNumber=e.target.value;state.autoNumber=false;$("#autoNumber").checked=false;markDirty();renderAll()};
+$("#caseMode").onchange=e=>{const b=selectedBlock();if(!b)return;b.caseMode=e.target.value;markDirty();renderPreview()};
+$("#richEditor").addEventListener("input",saveEditorHtml);$("#richEditor").addEventListener("paste",e=>{e.preventDefault();document.execCommand("insertText",false,e.clipboardData.getData("text/plain"))});
+$$('[data-command]').forEach(b=>b.onclick=()=>exec(b.dataset.command));
+$("#selectionFont").onchange=e=>exec("fontName",e.target.value);$("#selectionColor").oninput=e=>exec("foreColor",e.target.value);$("#selectionSize").onchange=e=>applyFontSize(e.target.value);
+$("#moveUpBtn").onclick=()=>moveSelected(-1);$("#moveDownBtn").onclick=()=>moveSelected(1);$("#duplicateBtn").onclick=()=>{const b=selectedBlock();if(!b)return;const i=state.blocks.indexOf(b),copy={...JSON.parse(JSON.stringify(b)),id:uid()};state.blocks.splice(i+1,0,copy);state.selectedId=copy.id;markDirty();renderAll()};$("#deleteBlockBtn").onclick=()=>state.selectedId&&deleteBlock(state.selectedId);
+[
+ ["coverMode","mode"],["coverVisible","visible"],["coverTitle","title"],["coverSubtitle","subtitle"],["coverAuthor","author"],["coverContact","contact"],["coverFont","font"],["coverTitleSize","titleSize"],["coverTitleColor","titleColor"]
+].forEach(([id,key])=>$("#"+id).addEventListener("input",e=>{state.cover[key]=e.target.value;markDirty();renderCoverEditor();renderPreview()}));
+$("#coverImageInput").onchange=e=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{state.cover.imageData=r.result;markDirty();renderCoverEditor();renderPreview()};r.readAsDataURL(f)};
+$("#removeCoverImage").onclick=()=>{state.cover.imageData="";$("#coverImageInput").value="";markDirty();renderCoverEditor();renderPreview()};
+$("#zoomSelect").onchange=e=>applyZoom(e.target.value);$("#zoomOut").onclick=()=>applyZoom(state.zoom-10);$("#zoomIn").onclick=()=>applyZoom(state.zoom+10);
+$("#fitWidth").onclick=()=>{const sc=$("#previewScroll"),p=$("#pages .paper");if(!p)return;applyZoom(Math.floor((sc.clientWidth-50)/p.offsetWidth*100))};
+$("#fitPage").onclick=()=>{const sc=$("#previewScroll"),p=$("#pages .paper");if(!p)return;applyZoom(Math.floor(Math.min((sc.clientWidth-50)/p.offsetWidth,(sc.clientHeight-50)/p.offsetHeight)*100))};
+$("#fullscreenBtn").onclick=()=>{$("#previewScroll").requestFullscreen?.()};$("#previewScroll").addEventListener("scroll",updateCurrentPage,{passive:true});
+$("#previewScroll").addEventListener("wheel",e=>{if(e.ctrlKey){e.preventDefault();applyZoom(state.zoom+(e.deltaY<0?10:-10))}},{passive:false});
+bindSplitter("#splitLeft","left");bindSplitter("#splitRight","right");
+window.addEventListener("beforeunload",e=>{if(state.dirty){e.preventDefault();e.returnValue=""}});
+const auto=localStorage.getItem("kashna_autosave_v2");if(auto){try{hydrate(JSON.parse(auto));toast("Otomatik taslak geri yüklendi")}catch{resetProject()}}else resetProject();
+</script>
+</body>
+</html>
