@@ -1,0 +1,439 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<title>Senaryo — Tek Sayfa</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --ink:#1a1a1a;
+    --paper:#ffffff;
+    --bg:#e9e6df;
+    --accent:#b4432c;
+    --line:#d8d3c8;
+    --muted:#8a8478;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;height:100%;background:var(--bg);font-family:-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);}
+
+  /* ---- top bar ---- */
+  #topbar{
+    position:sticky;top:0;z-index:20;
+    display:flex;align-items:center;gap:10px;
+    padding:10px 16px;
+    background:#232220;
+    color:#f2ede4;
+    flex-wrap:wrap;
+  }
+  #topbar .title{
+    font-weight:700;letter-spacing:.02em;margin-right:10px;font-size:15px;
+    color:#f2ede4;white-space:nowrap;
+  }
+  .seg{
+    display:flex;background:#33312d;border-radius:8px;padding:3px;gap:2px;
+  }
+  .seg button{
+    border:none;background:transparent;color:#c9c4b8;padding:6px 12px;
+    border-radius:6px;font-size:13px;cursor:pointer;font-family:inherit;
+  }
+  .seg button.active{background:var(--accent);color:#fff;}
+  #topbar .spacer{flex:1;}
+  .btn{
+    border:1px solid #4a473f;background:#2e2c28;color:#f2ede4;
+    padding:7px 13px;border-radius:7px;font-size:13px;cursor:pointer;font-family:inherit;
+  }
+  .btn:hover{background:#3a3833;}
+  .btn.primary{background:var(--accent);border-color:var(--accent);}
+  .btn.primary:hover{background:#9c3a26;}
+  #savestate{font-size:12px;color:#9a9587;white-space:nowrap;}
+
+  /* ---- workspace ---- */
+  #workspace{
+    padding:36px 16px 80px;
+    display:flex;flex-direction:column;align-items:center;gap:28px;
+  }
+  .page{
+    background:var(--paper);
+    width:8.5in;
+    min-height:11in;
+    box-shadow:0 2px 18px rgba(0,0,0,.18);
+    padding:1in 1in 1in 1.5in;
+    font-family:"Courier New",Courier,monospace;
+    font-size:12pt;
+    line-height:1.35;
+    position:relative;
+  }
+  #coverPage{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:0;}
+  #coverPage .field{outline:none;min-width:2em;padding:2px 6px;border-radius:3px;}
+  #coverPage .field:focus{background:#fdf6e9;}
+  #coverPage .title-field{font-size:16pt;font-weight:700;text-transform:uppercase;margin-bottom:26px;letter-spacing:.02em;}
+  #coverPage .gap{height:70px;}
+  #coverPage .small{font-size:12pt;color:#333;}
+  #coverPage .bottom-block{margin-top:120px;align-self:flex-start;text-align:left;font-size:11pt;}
+  #coverPage .hint{position:absolute;top:6px;left:0;right:0;text-align:center;font-family:sans-serif;font-size:10px;color:var(--muted);letter-spacing:.05em;}
+
+  #scriptEditor{outline:none;white-space:pre-wrap;word-wrap:break-word;min-height:9in;}
+  #scriptEditor .ln{min-height:1.35em;}
+  #scriptEditor .ln.action{margin:0 0 0 0;}
+  #scriptEditor .ln.scene{font-weight:700;text-decoration:underline;text-transform:uppercase;margin-top:1em;}
+  #scriptEditor .ln.character{margin-left:22ch;text-transform:uppercase;margin-top:1em;}
+  #scriptEditor .ln.parenthetical{margin-left:16ch;max-width:24ch;color:#333;}
+  #scriptEditor .ln.dialogue{margin-left:10ch;max-width:35ch;}
+  #scriptEditor .ln.transition{text-align:right;text-transform:uppercase;margin-top:1em;}
+
+  .tag{
+    position:absolute;left:-1.15in;top:0;width:1in;text-align:right;
+    font-family:sans-serif;font-size:9px;color:var(--muted);
+    opacity:0;transition:opacity .15s;pointer-events:none;
+  }
+  .ln:hover .tag, .ln:focus-within .tag{opacity:1;}
+  .ln{position:relative;}
+
+  #hint{
+    max-width:8.5in;width:100%;font-family:sans-serif;font-size:12.5px;color:#6b6558;
+    background:#f4efe4;border:1px solid var(--line);border-radius:8px;padding:10px 14px;
+  }
+  #hint b{color:var(--accent);}
+</style>
+</head>
+<body>
+
+<div id="topbar">
+  <div class="title">Senaryo</div>
+  <div class="seg" id="modeSeg">
+    <button data-mode="kapak">Kapak</button>
+    <button data-mode="senaryo" class="active">Senaryo</button>
+    <button data-mode="birlestir">Birleştir</button>
+  </div>
+  <div class="spacer"></div>
+  <span id="savestate">hazır</span>
+  <button class="btn" id="btnSave">Kaydet</button>
+  <button class="btn" id="btnPdf">PDF İndir</button>
+  <button class="btn primary" id="btnWord">Word İndir</button>
+</div>
+
+<div id="workspace">
+  <div id="hint">Yazmaya başla — format kendiliğinden oluşur: <b>INT./EXT.</b> ile başlayan satır sahne başlığı olur, <b>BÜYÜK HARFLİ</b> tek satır karakter adı olur, altındaki satır otomatik diyalog olur, düz cümleler aksiyon olur.</div>
+
+  <div class="page" id="coverPage" style="display:none;">
+    <div class="hint">KAPAK SAYFASI — alanlara tıkla, yaz</div>
+    <div class="field title-field" contenteditable="true" data-ph="BAŞLIK">TITO</div>
+    <div class="field small" contenteditable="true" data-ph="tür / alt başlık">A Short Film</div>
+    <div class="gap"></div>
+    <div class="field small" contenteditable="true" data-ph="Written by">Written by</div>
+    <div class="field small" contenteditable="true" data-ph="Yazar adı" style="margin-top:6px;">Erdal Demirkıran</div>
+    <div class="bottom-block">
+      <div class="field" contenteditable="true" data-ph="temas / e-posta">erdaldemirkiran0@gmail.com</div>
+    </div>
+  </div>
+
+  <div class="page" id="scriptPage">
+    <div id="scriptEditor" contenteditable="true" spellcheck="false"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script>
+(function(){
+  const editor = document.getElementById('scriptEditor');
+  const coverPage = document.getElementById('coverPage');
+  const scriptPage = document.getElementById('scriptPage');
+  const hint = document.getElementById('hint');
+  const saveState = document.getElementById('savestate');
+
+  // ---------- classification ----------
+  function classify(text, prevType){
+    const t = text.trim();
+    if(!t) return 'action';
+    const upper = t.toUpperCase();
+    if(/^(INT|EXT|INT\.?\/EXT|I\/E)[.\s\/]/.test(upper)) return 'scene';
+    if(/^\(.*\)$/.test(t)) return 'parenthetical';
+    if(t === upper && /:$/.test(t) && t.length < 30 && /TO:$|OUT:$|IN:$/.test(t)) return 'transition';
+    if(t === upper && t.length < 40 && !/[.!?,]$/.test(t)){
+      return 'character';
+    }
+    if(prevType === 'character' || prevType === 'parenthetical' || prevType === 'dialogue') return 'dialogue';
+    return 'action';
+  }
+
+  function ensureLine(){
+    if(editor.children.length === 0){
+      const div = document.createElement('div');
+      div.className = 'ln action';
+      div.dataset.type = 'action';
+      div.innerHTML = '<br>';
+      editor.appendChild(div);
+    }
+  }
+
+  function reclassifyLine(div){
+    if(!div || !div.classList.contains('ln')) return;
+    const prev = div.previousElementSibling;
+    const prevType = prev ? prev.dataset.type : null;
+    const text = div.textContent;
+    const type = classify(text, prevType);
+    div.dataset.type = type;
+    div.className = 'ln ' + type;
+  }
+
+  function getCurrentLine(){
+    const sel = window.getSelection();
+    if(!sel.rangeCount) return null;
+    let node = sel.getRangeAt(0).startContainer;
+    while(node && node !== editor && !(node.classList && node.classList.contains('ln'))){
+      node = node.parentNode;
+    }
+    return (node === editor) ? null : node;
+  }
+
+  function placeCaretEnd(el){
+    const range = document.createRange();
+    const sel = window.getSelection();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    sel.removeAllRanges();
+    sel.addRange(range);
+  }
+
+  editor.addEventListener('keydown', function(e){
+    if(e.key === 'Enter'){
+      e.preventDefault();
+      const cur = getCurrentLine();
+      if(!cur) return;
+      const sel = window.getSelection();
+      const range = sel.getRangeAt(0);
+
+      // split text at caret
+      const fullText = cur.textContent;
+      // compute caret offset within cur's text
+      const preRange = range.cloneRange();
+      preRange.selectNodeContents(cur);
+      preRange.setEnd(range.endContainer, range.endOffset);
+      const caretOffset = preRange.toString().length;
+
+      const before = fullText.slice(0, caretOffset);
+      const after = fullText.slice(caretOffset);
+
+      cur.textContent = before || '';
+      if(!before) cur.innerHTML = '<br>';
+
+      const newDiv = document.createElement('div');
+      newDiv.className = 'ln action';
+      newDiv.dataset.type = 'action';
+      newDiv.textContent = after || '';
+      if(!after) newDiv.innerHTML = '<br>';
+
+      cur.parentNode.insertBefore(newDiv, cur.nextSibling);
+      reclassifyLine(cur);
+      reclassifyLine(newDiv);
+      placeCaretEnd(newDiv);
+      scheduleSave();
+    }
+  });
+
+  editor.addEventListener('input', function(){
+    ensureLine();
+    const cur = getCurrentLine();
+    if(cur) reclassifyLine(cur);
+    scheduleSave();
+  });
+
+  editor.addEventListener('click', ensureLine);
+
+  // ---------- mode switching ----------
+  document.getElementById('modeSeg').addEventListener('click', function(e){
+    const btn = e.target.closest('button[data-mode]');
+    if(!btn) return;
+    document.querySelectorAll('#modeSeg button').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    const mode = btn.dataset.mode;
+    if(mode === 'kapak'){
+      coverPage.style.display = 'flex';
+      scriptPage.style.display = 'none';
+      hint.style.display = 'none';
+    } else if(mode === 'senaryo'){
+      coverPage.style.display = 'none';
+      scriptPage.style.display = 'block';
+      hint.style.display = 'block';
+    } else {
+      coverPage.style.display = 'flex';
+      scriptPage.style.display = 'block';
+      hint.style.display = 'none';
+    }
+  });
+
+  // ---------- storage ----------
+  let saveTimer = null;
+  function scheduleSave(){
+    saveState.textContent = 'yazılıyor…';
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(doSave, 900);
+  }
+
+  function getCoverData(){
+    const fields = coverPage.querySelectorAll('.field');
+    return Array.from(fields).map(f => f.textContent);
+  }
+
+  function getScriptLines(){
+    return Array.from(editor.children).map(div => ({type:div.dataset.type, text:div.textContent}));
+  }
+
+  async function doSave(){
+    try{
+      const data = { cover: getCoverData(), lines: getScriptLines() };
+      const res = await window.storage.set('senaryo-doc', JSON.stringify(data), false);
+      saveState.textContent = res ? 'kaydedildi' : 'kayıt hatası';
+    }catch(err){
+      saveState.textContent = 'kayıt hatası';
+      console.error(err);
+    }
+  }
+
+  async function loadSaved(){
+    try{
+      const res = await window.storage.get('senaryo-doc', false);
+      if(res && res.value){
+        const data = JSON.parse(res.value);
+        const fields = coverPage.querySelectorAll('.field');
+        if(data.cover){
+          fields.forEach((f,i) => { if(data.cover[i] !== undefined) f.textContent = data.cover[i]; });
+        }
+        if(data.lines && data.lines.length){
+          editor.innerHTML = '';
+          data.lines.forEach(l => {
+            const div = document.createElement('div');
+            div.className = 'ln ' + l.type;
+            div.dataset.type = l.type;
+            div.textContent = l.text;
+            if(!l.text) div.innerHTML = '<br>';
+            editor.appendChild(div);
+          });
+        }
+        saveState.textContent = 'yüklendi';
+      }
+    }catch(err){
+      // no saved doc yet — fine
+    }
+    ensureLine();
+  }
+
+  document.getElementById('btnSave').addEventListener('click', doSave);
+  loadSaved();
+
+  // ---------- PDF export ----------
+  document.getElementById('btnPdf').addEventListener('click', function(){
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({unit:'in', format:'letter'});
+    doc.setFont('courier','normal');
+    doc.setFontSize(12);
+
+    const leftMargin = 1.5, topMargin = 1, rightMargin = 1, bottomMargin = 1;
+    const pageWidth = 8.5, pageHeight = 11;
+    const lineHeight = 12/72*1.35*1.5; // approx inches per line at 12pt, 1.35 leading
+    const usableBottom = pageHeight - bottomMargin;
+
+    // cover page
+    const coverVals = getCoverData();
+    doc.setFont('courier','bold');
+    doc.text(coverVals[0]||'', pageWidth/2, 3.5, {align:'center'});
+    doc.setFont('courier','normal');
+    doc.text(coverVals[1]||'', pageWidth/2, 3.8, {align:'center'});
+    doc.text(coverVals[2]||'Written by', pageWidth/2, 4.6, {align:'center'});
+    doc.text(coverVals[3]||'', pageWidth/2, 4.85, {align:'center'});
+    doc.text(coverVals[4]||'', 1.5, 9.5);
+
+    doc.addPage();
+    let y = topMargin + 0.15;
+    const lines = getScriptLines();
+
+    function addPageIfNeeded(){
+      if(y > usableBottom){
+        doc.addPage();
+        y = topMargin + 0.15;
+      }
+    }
+
+    lines.forEach(l => {
+      if(!l.text){ y += lineHeight; return; }
+      addPageIfNeeded();
+      const t = l.type;
+      let x = leftMargin;
+      let text = l.text;
+      let opts = {};
+      let bold = false;
+      if(t === 'scene'){ text = text.toUpperCase(); bold = true; y += lineHeight*0.6; }
+      else if(t === 'character'){ x = leftMargin + 2.2; text = text.toUpperCase(); y += lineHeight*0.6; }
+      else if(t === 'parenthetical'){ x = leftMargin + 1.6; }
+      else if(t === 'dialogue'){ x = leftMargin + 1.0; }
+      else if(t === 'transition'){ x = pageWidth - rightMargin; text = text.toUpperCase(); opts.align='right'; y += lineHeight*0.6; }
+
+      const maxWidth = (t==='dialogue') ? 3.5 : (pageWidth - rightMargin - x);
+      doc.setFont('courier', bold ? 'bold':'normal');
+      const wrapped = doc.splitTextToSize(text, maxWidth);
+      wrapped.forEach(w => {
+        addPageIfNeeded();
+        doc.text(w, x, y, opts);
+        y += lineHeight;
+      });
+      if(t==='scene' && bold){
+        doc.setLineWidth(0.005);
+        doc.line(x, y-lineHeight+0.03, x+doc.getTextWidth(text), y-lineHeight+0.03);
+      }
+    });
+
+    const title = (coverVals[0]||'senaryo').trim() || 'senaryo';
+    doc.save(title.replace(/[^a-zA-Z0-9ığüşöçİĞÜŞÖÇ]+/g,'_') + '.pdf');
+  });
+
+  // ---------- Word export (HTML->doc) ----------
+  document.getElementById('btnWord').addEventListener('click', function(){
+    const coverVals = getCoverData();
+    const lines = getScriptLines();
+
+    const indent = { scene:'0in', character:'2.2in', parenthetical:'1.6in', dialogue:'1in', action:'0in', transition:'0in' };
+    const bodyLines = lines.map(l=>{
+      let text = (l.text||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      if(!text) return '<p style="margin:0;">&nbsp;</p>';
+      let style = 'margin:0 0 0 '+ (indent[l.type]||'0in') +';';
+      if(l.type==='scene'){ text = text.toUpperCase(); style += 'font-weight:bold;text-decoration:underline;margin-top:12pt;'; }
+      if(l.type==='character'){ text = text.toUpperCase(); style += 'margin-top:12pt;'; }
+      if(l.type==='transition'){ text = text.toUpperCase(); style += 'text-align:right;margin-top:12pt;'; }
+      if(l.type==='dialogue'){ style += 'width:3.5in;'; }
+      return '<p style="'+style+'">'+text+'</p>';
+    }).join('\n');
+
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+      <style>
+        @page { size: 8.5in 11in; margin: 1in 1in 1in 1.5in; }
+        body { font-family:"Courier New",monospace; font-size:12pt; line-height:1.35; }
+        .cover { text-align:center; }
+        .titleline { font-size:16pt; font-weight:bold; text-transform:uppercase; margin-bottom:26pt; }
+      </style></head><body>
+      <div class="cover">
+        <p class="titleline">${coverVals[0]||''}</p>
+        <p>${coverVals[1]||''}</p>
+        <p style="margin-top:40pt;">${coverVals[2]||'Written by'}</p>
+        <p>${coverVals[3]||''}</p>
+        <p style="margin-top:100pt;text-align:left;">${coverVals[4]||''}</p>
+      </div>
+      <br clear="all" style="page-break-before:always">
+      ${bodyLines}
+      </body></html>`;
+
+    const blob = new Blob(['\ufeff', html], {type:'application/msword'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const title = (coverVals[0]||'senaryo').trim() || 'senaryo';
+    a.href = url;
+    a.download = title.replace(/[^a-zA-Z0-9ığüşöçİĞÜŞÖÇ]+/g,'_') + '.doc';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  });
+
+})();
+</script>
+</body>
+</html>
